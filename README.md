@@ -1,67 +1,71 @@
-# Autonomous SRE Pipeline
+# autonomous-sre-pipeline
 
-An autonomous agent that ingests logs, detects anomalies using configurable rules, validates actions through a rules-engine policy gateway, and executes remediations.
+> Local autonomous SRE agent — ingests logs, detects anomalies, and gates 
+> all remediation actions through a policy webhook before execution.
 
-## Quickstart (Docker Compose)
+![Python](https://img.shields.io/badge/python-3.11+-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-v0.1.1-orange)
 
-The easiest way to run the pipeline is with Docker Compose. This starts both the **Policy Webhook Service** and the **SRE Agent** container.
+## What it does
 
-1. **Create a logs directory** and add some sample logs:
-   ```bash
-   mkdir logs
-   echo '2025-01-15 10:23:45 ERROR auth-service Connection timeout' > logs/test.log
-   ```
+1. **Ingests** structured JSON and plaintext logs from a local directory  
+2. **Detects** anomalies using configurable rule-based thresholds  
+3. **Gates** every remediation action through a policy webhook — nothing 
+   executes without approval  
+4. **Defers** severity-5 actions to a human approval queue persisted to disk  
+5. **Executes** approved actions via systemctl or Docker  
 
-2. **Start the stack**:
-   ```bash
-   docker-compose up --build
-   ```
+## Quickstart
 
-3. **Observe**:
-   - The policy service runs at `http://localhost:8001`.
-   - The agent continually scans the mounted `./logs` directory every 15 seconds.
-   - Any log matching anomalous patterns will trigger an action request, which the policy service approves, denies, or defers.
+```bash
+git clone https://github.com/Kanishka8375/autonomous-sre-pipeline
+cd autonomous-sre-pipeline
+pip install -r requirements.txt
+./demo.sh
+```
 
-## Running Locally via CLI
+## Demo output
 
-You can also run the agent natively using Python:
+```text
+[DRY-RUN] Pipeline run complete: 3 anomalies, 2 approved, 1 deferred, 0 executed.
+--- Deferred (severity 5, awaiting human) ---
+{
+  "bdb32589": {
+    "service": "db-primary",
+    "action": "restart_service",
+    "severity": 5,
+    "status": "pending"
+  }
+}
+```
 
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Architecture
 
-2. **Start the Policy Service (in a separate terminal)**:
-   ```bash
-   uvicorn sre_pipeline.webhook:app --host 127.0.0.1 --port 8001
-   ```
+```text
+LogIngester → AnomalyDetector → PolicyGateway → RemediationExecutor
+                                      ↓
+                              policy webhook
+                              (approve/deny/defer)
+                                      ↓
+                              deferred_queue.json
+                              (human approval)
+```
 
-3. **Start the Agent**:
-   ```bash
-   python -m sre_pipeline --logs /path/to/your/logs --policy http://127.0.0.1:8001/v1/policy/validate --dry-run
-   ```
+## CLI
 
-### Options for CLI:
-- `--logs <dir>`: Path to the directory containing logs to parse.
-- `--policy <url>`: URL of the policy validation webhook.
-- `--dry-run`: Evaluate actions and log them, but don't actually execute the remediation (e.g., `systemctl`).
-- `--interval <sec>`: Time between pipeline execution loops (default 30s).
-- `--executor <systemctl|docker>`: Execution method for remediations (default systemctl).
+```bash
+python -m sre_pipeline \
+  --logs /var/log/myapp \
+  --policy http://127.0.0.1:8001 \
+  --executor systemctl \
+  --interval 30 \
+  --dry-run
+```
 
 ## Known Limitations
 
-- **systemctl executor**: Requires a systemd-enabled host. Fails gracefully
-  in standard Docker containers (exit code 5, logged, pipeline continues).
-  Use `--executor docker` for containerized fleets.
-
-- **Human approval queue**: Severity-5 actions are deferred and persisted to
-  `deferred_queue.json`. Resolution requires manual API call. No notification
-  system (email/Slack) is included — this is a local tool.
-
-- **In-memory webhook state**: The FastAPI policy service loses runtime state
-  on restart. `deferred_queue.json` persists deferred requests, but the
-  in-memory approval_queue dict does not survive a webhook restart.
-
-- **Log formats**: Supports structured JSON and plaintext with configurable
-  regex. Binary logs, compressed `.gz` files, and journald binary format
-  are skipped silently.
+- `systemctl` executor requires a systemd host — fails gracefully in standard Docker containers
+- Human approval queue requires manual API call — no notification system
+- Webhook state is in-memory — deferred_queue.json persists to disk
+- Binary and compressed log formats are skipped silently
