@@ -4,6 +4,8 @@ from sre_pipeline.policy_gateway import PolicyGateway
 from sre_pipeline.remediation_executor import RemediationExecutor
 from sre_pipeline.models import PipelineReport, PolicyVerdict
 
+__all__ = ["PipelineOrchestrator", "PipelineReport"]
+
 class PipelineOrchestrator:
     """Orchestrates the entire SRE pipeline from ingestion to remediation."""
 
