@@ -2,6 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sre_pipeline.webhook import app, db
 from sre_pipeline.db import DeferredEvent
+import sre_pipeline.webhook
+
+sre_pipeline.webhook.SERVICE_ALLOWLIST.update({"api-gateway", "db-primary", "test-service"})
 
 client = TestClient(app)
 
