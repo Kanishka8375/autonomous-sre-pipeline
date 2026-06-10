@@ -36,6 +36,8 @@ def main() -> None:
         except Exception as e:
             logging.error(f"Pipeline error: {e}")
         
+        if args.interval == 0:
+            break
         logging.info(f"Sleeping for {args.interval}s...")
         time.sleep(args.interval)
 
