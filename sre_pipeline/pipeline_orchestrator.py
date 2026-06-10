@@ -25,17 +25,19 @@ class PipelineOrchestrator:
         decisions = []
         actions_approved = 0
         actions_denied = 0
+        actions_deferred = 0
         
         for anomaly in anomalies:
             decision = self.policy_gateway.evaluate(anomaly)
             
             if decision.verdict == PolicyVerdict.DEFERRED:
                 self.policy_gateway.logger.info("Decision deferred for %s — logged to deferred_queue.json", decision.request_id)
+                actions_deferred += 1
                 
             decisions.append(decision)
             if decision.verdict == PolicyVerdict.APPROVED:
                 actions_approved += 1
-            else:
+            elif decision.verdict == PolicyVerdict.DENIED:
                 actions_denied += 1
                 
         # Phase 4: Remediation Execution
@@ -48,6 +50,7 @@ class PipelineOrchestrator:
             actions_proposed=len(anomalies),
             actions_approved=actions_approved,
             actions_denied=actions_denied,
+            actions_deferred=actions_deferred,
             actions_executed=actions_executed,
             results=results
         )

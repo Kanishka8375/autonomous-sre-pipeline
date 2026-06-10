@@ -67,5 +67,6 @@ class PipelineReport:
     actions_proposed: int
     actions_approved: int
     actions_denied: int
+    actions_deferred: int
     actions_executed: int
     results: list[RemediationResult]

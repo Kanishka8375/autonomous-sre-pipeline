@@ -29,9 +29,11 @@ def main() -> None:
     while True:
         try:
             report = orchestrator.run()
+            mode = "DRY-RUN" if args.dry_run else "LIVE"
             logging.info(
-                f"Pipeline run complete: {report.anomalies_detected} anomalies detected, "
-                f"{report.actions_approved} approved, {report.actions_executed} executed."
+                f"[{mode}] Pipeline run complete: {report.anomalies_detected} anomalies, "
+                f"{report.actions_approved} approved, {report.actions_deferred} deferred, "
+                f"{report.actions_executed} executed."
             )
         except Exception as e:
             logging.error(f"Pipeline error: {e}")
