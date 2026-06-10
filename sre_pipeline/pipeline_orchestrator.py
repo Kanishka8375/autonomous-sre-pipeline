@@ -31,7 +31,6 @@ class PipelineOrchestrator:
             decision = self.policy_gateway.evaluate(anomaly)
             
             if decision.verdict == PolicyVerdict.DEFERRED:
-                self.policy_gateway.logger.info("Decision deferred for %s — logged to deferred_queue.json", decision.request_id)
                 actions_deferred += 1
                 
             decisions.append(decision)

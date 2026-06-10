@@ -38,6 +38,8 @@ class PolicyGateway:
                         anomaly.context.get("service", "unknown"), anomaly.rule_id)
             return
 
+        self.logger.info("Decision deferred for %s — logged to deferred_queue.json", request_id)
+
         queue = json.loads(DEFERRED_FILE.read_text()) if DEFERRED_FILE.exists() else {}
         queue[request_id] = {
             "service": anomaly.context.get("service", "unknown"),
