@@ -16,12 +16,28 @@ class PolicyGateway:
         self.webhook_url: str = webhook_url
         self.logger: logging.Logger = logging.getLogger(__name__)
 
+    def _is_already_deferred(self, service: str, rule_id: str) -> bool:
+        if not DEFERRED_FILE.exists():
+            return False
+        queue = json.loads(DEFERRED_FILE.read_text())
+        return any(
+            v["service"] == service
+            and v["rule_id"] == rule_id
+            and v["status"] == "pending"
+            for v in queue.values()
+        )
+
     def _persist_deferred(
         self,
         request_id: str,
         anomaly: AnomalyEvent,
         decision: PolicyDecision
     ) -> None:
+        if self._is_already_deferred(anomaly.context.get("service", "unknown"), anomaly.rule_id):
+            self.logger.info("Duplicate deferred skipped: %s/%s already pending",
+                        anomaly.context.get("service", "unknown"), anomaly.rule_id)
+            return
+
         queue = json.loads(DEFERRED_FILE.read_text()) if DEFERRED_FILE.exists() else {}
         queue[request_id] = {
             "service": anomaly.context.get("service", "unknown"),
