@@ -31,9 +31,36 @@ def is_within_time_window() -> bool:
     end = datetime.time(23, 59)
     return start <= now <= end
 
+import subprocess
+
+def detect_local_services() -> set[str]:
+    """Auto-detect running systemd services on this machine."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "list-units", "--type=service",
+             "--state=running", "--no-pager", "--plain"],
+            capture_output=True, text=True, timeout=5
+        )
+        services = set()
+        for line in result.stdout.splitlines():
+            if ".service" in line:
+                name = line.split()[0].replace(".service", "")
+                services.add(name)
+        return services
+    except Exception:
+        return set()
+
 DEFAULT_ALLOWLIST = {"auth-service", "db-primary", "api-gateway", "test-service"}
 allowlist_env = os.getenv("SRE_ALLOWLIST", "")
-SERVICE_ALLOWLIST = set(allowlist_env.split(",")) if allowlist_env else DEFAULT_ALLOWLIST
+if allowlist_env:
+    SERVICE_ALLOWLIST = set(allowlist_env.split(","))
+else:
+    detected = detect_local_services()
+    SERVICE_ALLOWLIST = detected if detected else DEFAULT_ALLOWLIST
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 @app.post("/v1/policy/validate")
 def validate(req: PolicyRequestData) -> Dict[str, Any]:

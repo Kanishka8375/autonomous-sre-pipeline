@@ -16,51 +16,64 @@
 4. **Defers** severity-5 actions to a human approval queue persisted to disk  
 5. **Executes** approved actions via systemctl or Docker  
 
-## Quickstart
+## What this agent will do
+
+✓ Read log files — never modifies them
+✓ POST to your policy webhook before ANY action
+✓ Log every decision to SQLite audit table
+✓ In dry-run mode: only logs what it WOULD do
+
+## What this agent will NOT do without your explicit approval
+
+✗ Restart any service (requires policy webhook approval)
+✗ Execute any command (blocked until webhook returns "approved")
+✗ Do anything on severity-5 events (always requires human via /ui/queue)
+
+## Safe to run right now
+
+Start in dry-run mode — zero system impact, full visibility:
+```bash
+# For nginx users:
+python -m sre_pipeline --source nginx --dry-run
+
+# For Docker users:
+python -m sre_pipeline --source docker --dry-run
+
+# For systemd users:
+python -m sre_pipeline --source journald --dry-run
+```
+
+Start with visibility and triage automation, prove value with measurable metrics, and expand to autonomous remediation as your team's confidence grows. 
+
+## Value Reporting
+
+Someone runs it for 24 hours in dry-run. They want to know: was it worth it?
 
 ```bash
-git clone https://github.com/Kanishka8375/autonomous-sre-pipeline
-cd autonomous-sre-pipeline
-pip install -r requirements.txt
-./demo.sh
+python -m sre_pipeline --report
 ```
 
-## Demo output
-
+Output:
 ```text
-[DRY-RUN] Pipeline run complete: 3 anomalies, 2 approved, 1 deferred, 0 executed.
---- Deferred (severity 5, awaiting human) ---
-{
-  "bdb32589": {
-    "service": "db-primary",
-    "action": "restart_service",
-    "severity": 5,
-    "status": "pending"
-  }
-}
-```
+═══════════════════════════════════════
+SRE PIPELINE — 24 HOUR REPORT
+═══════════════════════════════════════
+Logs processed:        14,823
+Anomalies detected:        47
+  → Severity 1-2:          31  (alert_oncall)
+  → Severity 3-4:          14  (restart_service)
+  → Severity 5:             2  (deferred — awaiting human)
 
-## Architecture
+Top offending services:
+  auth-service     23 events  (HIGH_ERROR_RATE x18, SERVICE_WARN x5)
+  db-primary        2 events  (CRITICAL_LOG x2) ← needs your attention
 
-```text
-LogIngester → AnomalyDetector → PolicyGateway → RemediationExecutor
-                                      ↓
-                              policy webhook
-                              (approve/deny/defer)
-                                      ↓
-                              deferred_queue.json
-                              (human approval)
-```
+Actions that WOULD have executed in live mode:
+  restart_service   14x  ← each one = manual intervention saved
+  alert_oncall      31x
 
-## CLI
-
-```bash
-python -m sre_pipeline \
-  --logs /var/log/myapp \
-  --policy http://127.0.0.1:8001 \
-  --executor systemctl \
-  --interval 30 \
-  --dry-run
+Estimated time saved: ~4.2 hours of manual log monitoring
+═══════════════════════════════════════
 ```
 
 ## Known Limitations
