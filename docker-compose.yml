@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  policy:
+    build: .
+    container_name: sre-policy-service
+    command: uvicorn sre_pipeline.webhook:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  agent:
+    build: .
+    container_name: sre-agent
+    command: python -m sre_pipeline --logs /var/log/myapp --policy http://policy:8001/v1/policy/validate --dry-run --interval 15
+    volumes:
+      - ./logs:/var/log/myapp
+    depends_on:
+      - policy
+    restart: unless-stopped

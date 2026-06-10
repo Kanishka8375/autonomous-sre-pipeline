@@ -1,0 +1,9 @@
+logs/
+__pycache__/
+*.pyc
+.Trash*
+lost+found/
+pipeline.log
+webhook.log
+sre_pipeline/deferred_queue.json
+sre_pipeline/approval_queue.json
