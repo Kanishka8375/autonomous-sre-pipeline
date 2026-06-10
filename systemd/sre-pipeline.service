@@ -1,0 +1,19 @@
+[Unit]
+Description=Autonomous SRE Pipeline Webhook and Orchestrator
+After=network.target
+
+[Service]
+Type=simple
+User=sre
+Group=sre
+WorkingDirectory=/opt/autonomous_sre_pipeline
+Environment=SRE_ALLOWLIST=db-primary,auth-service,api-gateway
+ExecStart=/opt/autonomous_sre_pipeline/venv/bin/uvicorn sre_pipeline.webhook:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=sre-pipeline
+
+[Install]
+WantedBy=multi-user.target

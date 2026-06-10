@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pending Approvals</title>
+</head>
+<body>
+    <h1>Pending Approvals</h1>
+    <ul>
+        {% for event in events %}
+        <li>
+            {{ event.service }} - {{ event.rule_id }} (Severity: {{ event.severity }})
+            <form action="/v1/policy/approve/{{ event.id }}" method="POST">
+                <button type="submit">Approve</button>
+            </form>
+        </li>
+        {% else %}
+        <li>No pending approvals.</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

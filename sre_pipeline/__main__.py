@@ -4,11 +4,9 @@ import logging
 import sys
 from .pipeline_orchestrator import PipelineOrchestrator
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
+from .structured_logger import setup_structured_logging
+
+setup_structured_logging(level=logging.INFO)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Autonomous SRE Pipeline Agent")

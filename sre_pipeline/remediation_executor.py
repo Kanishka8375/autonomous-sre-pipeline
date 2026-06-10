@@ -54,7 +54,7 @@ class RemediationExecutor:
         if action == ActionType.RESTART_SERVICE:
             try:
                 if self.executor == "docker":
-                    import docker
+                    import docker  # type: ignore[import-untyped]
                     client = docker.from_env()
                     client.containers.get(service).restart()
                     outcome = f"Restarted service {service} via Docker API"

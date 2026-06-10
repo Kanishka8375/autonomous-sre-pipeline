@@ -1,30 +1,23 @@
 import uuid
 import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
 import os
 import json
 from pathlib import Path
 
 from sre_pipeline.models import PolicyVerdict
+from sre_pipeline.db import Database, DeferredEvent
+from sre_pipeline.structured_logger import setup_structured_logging
+from sre_pipeline.auth import verify_api_key
+from sre_pipeline.approval_ui import ui_router
+
+setup_structured_logging()
 
 app = FastAPI()
-
-# File-backed queue for deferred requests: request_id -> status dict
-QUEUE_FILE = Path("sre_pipeline/approval_queue.json")
-
-def load_queue() -> dict[str, Any]:
-    if QUEUE_FILE.exists():
-        try:
-            return json.loads(QUEUE_FILE.read_text())
-        except Exception:
-            return {}
-    return {}
-
-def save_queue(queue: dict[str, Any]) -> None:
-    QUEUE_FILE.parent.mkdir(exist_ok=True, parents=True)
-    QUEUE_FILE.write_text(json.dumps(queue, indent=2))
+app.include_router(ui_router)
+db = Database()
 
 class PolicyRequestData(BaseModel):
     action_type: str
@@ -58,12 +51,16 @@ def validate(req: PolicyRequestData) -> Dict[str, Any]:
     if severity == 5:
         # Require human approval
         req_id = str(uuid.uuid4())
-        queue = load_queue()
-        queue[req_id] = {
-            "verdict": PolicyVerdict.DEFERRED.value,
-            "action": req.action_type
-        }
-        save_queue(queue)
+        event = DeferredEvent(
+            id=req_id,
+            service=service,
+            rule_id=req.context.get("rule_id", "UNKNOWN"),
+            action=req.action_type,
+            severity=severity,
+            status="pending",
+            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat()
+        )
+        db.upsert_deferred(event)
         return {
             "verdict": PolicyVerdict.DEFERRED.value,
             "reason": "Severity 5 requires manual approval",
@@ -94,22 +91,36 @@ def validate(req: PolicyRequestData) -> Dict[str, Any]:
 @app.get("/v1/policy/status/{request_id}")
 def get_status(request_id: str) -> Dict[str, Any]:
     """Poll endpoint for deferred requests."""
-    queue = load_queue()
-    if request_id not in queue:
-        raise HTTPException(status_code=404, detail="Request not found")
-    status = queue[request_id]
-    
-    return {
-        "verdict": status["verdict"],
-        "approved_action": status["action"] if status["verdict"] == PolicyVerdict.APPROVED.value else None
-    }
+    # We query the DB for the event. Wait, list_pending only returns pending. 
+    # We need a query by ID. Or we can just get all events.
+    # Actually, we can add a method or query direct.
+    with db._get_conn() as conn:
+        cursor = conn.execute("SELECT status, action FROM deferred_events WHERE id = ?", (request_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        return {
+            "verdict": row["status"],
+            "approved_action": row["action"] if row["status"] == PolicyVerdict.APPROVED.value else None
+        }
 
 @app.post("/v1/policy/approve/{request_id}")
 def approve_request(request_id: str) -> Dict[str, Any]:
     """Human approval webhook."""
-    queue = load_queue()
-    if request_id in queue:
-        queue[request_id]["verdict"] = PolicyVerdict.APPROVED.value
-        save_queue(queue)
-        return {"status": "approved"}
-    raise HTTPException(status_code=404, detail="Not found")
+    with db._get_conn() as conn:
+        cursor = conn.execute("SELECT id FROM deferred_events WHERE id = ?", (request_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Not found")
+    
+    db.resolve_deferred(request_id, PolicyVerdict.APPROVED.value, "admin")
+    return {"status": "approved"}
+
+@app.get("/v1/audit")
+def get_audit(api_key: str = Depends(verify_api_key)) -> List[Dict[str, Any]]:
+    """Return all audit logs."""
+    # Assuming db has a way to get audit logs. Let's query SQLite.
+    with db._get_conn() as conn:
+        cursor = conn.execute("SELECT * FROM audit_log ORDER BY timestamp DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
